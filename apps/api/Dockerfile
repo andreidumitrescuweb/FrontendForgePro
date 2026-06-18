@@ -31,4 +31,4 @@ COPY --from=builder /repo/apps/api/dist apps/api/dist
 COPY --from=builder /repo/apps/api/prisma apps/api/prisma
 
 EXPOSE 4000
-CMD ["node", "apps/api/dist/src/index.js"]
+CMD ["sh", "-c", "node_modules/.bin/prisma db push --skip-generate --schema apps/api/prisma/schema.prisma && node apps/api/dist/src/index.js"]
