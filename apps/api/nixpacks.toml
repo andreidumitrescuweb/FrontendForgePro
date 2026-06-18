@@ -1,0 +1,15 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "openssl"]
+
+[phases.install]
+cmds = ["npm install --workspaces --include-workspace-root"]
+
+[phases.build]
+cmds = [
+  "npm run build -w packages/shared",
+  "npx prisma generate --schema apps/api/prisma/schema.prisma",
+  "npm run build -w apps/api"
+]
+
+[start]
+cmd = "npx prisma db push --skip-generate --schema apps/api/prisma/schema.prisma && node apps/api/dist/src/index.js"
