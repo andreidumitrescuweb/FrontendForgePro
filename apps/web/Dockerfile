@@ -20,11 +20,11 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Copy the standalone output (self-contained server)
-COPY --from=builder /repo/apps/web/.next/standalone/apps/web ./
-# Copy static assets where standalone server expects them
-COPY --from=builder /repo/apps/web/.next/static .next/static
-COPY --from=builder /repo/apps/web/public public
+# Copy entire standalone directory (includes bundled node_modules)
+COPY --from=builder /repo/apps/web/.next/standalone ./
+# Static assets must sit next to .next/ inside the monorepo-relative path
+COPY --from=builder /repo/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /repo/apps/web/public ./apps/web/public
 
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]
