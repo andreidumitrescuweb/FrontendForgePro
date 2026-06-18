@@ -1,25 +1,33 @@
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 WORKDIR /repo
 
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/web/package.json apps/web/
+
 RUN npm install --workspaces --include-workspace-root
 
 COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/web apps/web
 
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build -w packages/shared && npm run build -w apps/web
+RUN npm run build -w packages/shared \
+ && npm run build -w apps/web
 
-FROM node:20-alpine
-WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+FROM node:20-slim
+WORKDIR /repo
+ENV NODE_ENV=production
 
-COPY --from=builder /repo/apps/web/.next/standalone ./
-COPY --from=builder /repo/apps/web/.next/static apps/web/.next/static
+COPY --from=builder /repo/node_modules node_modules
+COPY --from=builder /repo/package.json package.json
+COPY --from=builder /repo/packages/shared/package.json packages/shared/package.json
+COPY --from=builder /repo/packages/shared/dist packages/shared/dist
+COPY --from=builder /repo/apps/web/package.json apps/web/package.json
+COPY --from=builder /repo/apps/web/.next apps/web/.next
 COPY --from=builder /repo/apps/web/public apps/web/public
 
 EXPOSE 3000
-CMD ["node", "apps/web/server.js"]
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+CMD ["node", "apps/web/.next/standalone/apps/web/server.js"]
