@@ -1,0 +1,404 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== Enums =====================
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum ProjectType {
+  LANDING_PAGE
+  ECOMMERCE
+  DASHBOARD
+  BLOG
+  PORTFOLIO
+  OTHER
+}
+
+enum GenerationStatus {
+  QUEUED
+  PLANNING
+  GENERATING
+  VALIDATING
+  REVIEWING
+  SEO_PASS
+  COMPLETED
+  FAILED
+}
+
+enum DeploymentProvider {
+  VERCEL
+  NETLIFY
+  CLOUDFLARE_PAGES
+  GITHUB_PAGES
+}
+
+enum DeploymentStatus {
+  PENDING
+  BUILDING
+  READY
+  ERROR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+  INCOMPLETE
+}
+
+enum ListingStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ListingLicense {
+  PERSONAL
+  COMMERCIAL
+  EXTENDED
+}
+
+// ===================== Identity =====================
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String?
+  name             String
+  avatarUrl        String?
+  role             UserRole  @default(USER)
+  emailVerifiedAt  DateTime?
+  totpSecretEnc    String? // AES-256-GCM encrypted TOTP secret
+  totpEnabled      Boolean   @default(false)
+  credits          Int       @default(0)
+  stripeCustomerId String?   @unique
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  oauthAccounts   OAuthAccount[]
+  refreshTokens   RefreshToken[]
+  memberships     WorkspaceMember[]
+  versionsCreated ProjectVersion[]
+  auditLogs       AuditLog[]
+  chatMessages    ChatMessage[]
+  listings        TemplateListing[]  @relation("SellerListings")
+  purchases       TemplatePurchase[]
+  reviews         TemplateReview[]
+  generationJobs  GenerationJob[]
+  creditPurchases CreditPurchase[]
+
+  @@index([email])
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  provider          String // google | github | linkedin
+  providerAccountId String
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ===================== Tenancy =====================
+
+model Workspace {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  members      WorkspaceMember[]
+  projects     Project[]
+  subscription Subscription?
+  auditLogs    AuditLog[]
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        WorkspaceRole @default(EDITOR)
+  createdAt   DateTime      @default(now())
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+// ===================== Projects =====================
+
+model Project {
+  id               String      @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name             String
+  type             ProjectType
+  brief            Json
+  analyticsKey     String      @unique @default(cuid())
+  currentVersionId String?     @unique
+  currentVersion   ProjectVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  isPublicTemplate Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  deletedAt        DateTime?
+
+  versions        ProjectVersion[]
+  deployments     Deployment[]
+  chatMessages    ChatMessage[]
+  generationJobs  GenerationJob[]
+  listing         TemplateListing?
+  analyticsEvents AnalyticsEvent[]
+
+  @@index([workspaceId])
+}
+
+model ProjectVersion {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number          Int
+  label           String?
+  branchName      String   @default("main")
+  parentVersionId String?
+  parentVersion   ProjectVersion?  @relation("VersionTree", fields: [parentVersionId], references: [id])
+  children        ProjectVersion[] @relation("VersionTree")
+  // Full bundle gzipped (JSON of GeneratedBundle). Immutable.
+  bundleGz        Bytes
+  thumbnailUrl    String?
+  createdById     String?
+  createdBy       User?    @relation(fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+
+  currentOf Project? @relation("CurrentVersion")
+
+  @@unique([projectId, number])
+  @@index([projectId, branchName])
+}
+
+model GenerationJob {
+  id         String           @id @default(cuid())
+  projectId  String
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User             @relation(fields: [userId], references: [id])
+  status     GenerationStatus @default(QUEUED)
+  attempts   Int              @default(0)
+  input      Json
+  result     Json?
+  error      String?
+  createdAt  DateTime         @default(now())
+  finishedAt DateTime?
+
+  @@index([projectId])
+  @@index([userId, createdAt])
+}
+
+model Deployment {
+  id         String             @id @default(cuid())
+  projectId  String
+  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  provider   DeploymentProvider
+  status     DeploymentStatus   @default(PENDING)
+  url        String?
+  externalId String?
+  logs       Json?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([projectId])
+}
+
+// ===================== Billing =====================
+
+model Plan {
+  id               String  @id @default(cuid())
+  key              String  @unique // free | pro | agency | enterprise
+  name             String
+  priceMonthly     Int // cents; 0 free, -1 custom
+  stripePriceId    String?
+  limits           Json
+  subscriptions    Subscription[]
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  workspaceId          String             @unique
+  workspace            Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  planId               String
+  plan                 Plan               @relation(fields: [planId], references: [id])
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+model CreditPurchase {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id])
+  packId                String
+  credits               Int
+  amountCents           Int
+  stripePaymentIntentId String?  @unique
+  fulfilled             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+}
+
+// ===================== Marketplace =====================
+
+model TemplateListing {
+  id          String         @id @default(cuid())
+  projectId   String         @unique
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sellerId    String
+  seller      User           @relation("SellerListings", fields: [sellerId], references: [id])
+  title       String
+  description String
+  priceCents  Int
+  license     ListingLicense
+  category    String
+  status      ListingStatus  @default(PENDING_REVIEW)
+  ratingAvg   Float          @default(0)
+  ratingCount Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  purchases TemplatePurchase[]
+  reviews   TemplateReview[]
+
+  @@index([status, category])
+}
+
+model TemplatePurchase {
+  id               String          @id @default(cuid())
+  listingId        String
+  listing          TemplateListing @relation(fields: [listingId], references: [id])
+  buyerId          String
+  buyer            User            @relation(fields: [buyerId], references: [id])
+  pricePaidCents   Int
+  sellerShareCents Int
+  stripePaymentId  String?
+  createdAt        DateTime        @default(now())
+
+  @@unique([listingId, buyerId])
+}
+
+model TemplateReview {
+  id        String          @id @default(cuid())
+  listingId String
+  listing   TemplateListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User            @relation(fields: [buyerId], references: [id])
+  rating    Int
+  comment   String?
+  createdAt DateTime        @default(now())
+
+  @@unique([listingId, buyerId])
+}
+
+// ===================== Collaboration =====================
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+// ===================== Platform =====================
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id])
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  action      String // e.g. project.create, auth.login
+  entity      String?
+  entityId    String?
+  meta        Json?
+  ip          String?
+  createdAt   DateTime   @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      String // pageview | event
+  name      String?
+  path      String
+  referrer  String?
+  uaHash    String?
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+// Encrypted runtime secrets (per-tenant API keys etc.), AES-256-GCM.
+model EncryptedSecret {
+  id         String   @id @default(cuid())
+  scope      String // global | workspace:<id>
+  name       String
+  ciphertext String
+  iv         String
+  authTag    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([scope, name])
+}
+
+// Global runtime configuration editable from the admin panel.
+model AppConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

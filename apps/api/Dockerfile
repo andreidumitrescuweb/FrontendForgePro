@@ -1,0 +1,35 @@
+# Shared image for both the API and the worker (compose overrides the command).
+FROM node:20-alpine AS builder
+WORKDIR /repo
+
+RUN apk add --no-cache openssl
+
+COPY package.json package-lock.json* ./
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+RUN npm install --workspaces --include-workspace-root
+
+COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
+COPY apps/api apps/api
+
+RUN npm run build -w packages/shared \
+ && npx prisma generate --schema apps/api/prisma/schema.prisma \
+ && npm run build -w apps/api
+
+FROM node:20-alpine
+WORKDIR /repo
+ENV NODE_ENV=production
+
+RUN apk add --no-cache openssl
+
+COPY --from=builder /repo/node_modules node_modules
+COPY --from=builder /repo/package.json package.json
+COPY --from=builder /repo/packages/shared/package.json packages/shared/package.json
+COPY --from=builder /repo/packages/shared/dist packages/shared/dist
+COPY --from=builder /repo/apps/api/package.json apps/api/package.json
+COPY --from=builder /repo/apps/api/dist apps/api/dist
+COPY --from=builder /repo/apps/api/prisma apps/api/prisma
+
+EXPOSE 4000
+CMD ["node", "apps/api/dist/src/index.js"]

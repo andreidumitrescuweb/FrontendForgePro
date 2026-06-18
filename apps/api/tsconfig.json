@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["node", "jest"],
+    // Resolve @forge/shared through node_modules (built dist + .d.ts),
+    // not the source mapping from the base config — keeps rootDir clean.
+    "baseUrl": ".",
+    "paths": {}
+  },
+  "include": ["src", "prisma/seed.ts", "tests"]
+}
