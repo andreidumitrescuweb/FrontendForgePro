@@ -1,8 +1,7 @@
-# Shared image for both the API and the worker (compose overrides the command).
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 WORKDIR /repo
 
-RUN apk add --no-cache openssl
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/
@@ -17,11 +16,11 @@ RUN npm run build -w packages/shared \
  && npx prisma generate --schema apps/api/prisma/schema.prisma \
  && npm run build -w apps/api
 
-FROM node:20-alpine
+FROM node:20-slim
 WORKDIR /repo
 ENV NODE_ENV=production
 
-RUN apk add --no-cache openssl
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /repo/node_modules node_modules
 COPY --from=builder /repo/package.json package.json
