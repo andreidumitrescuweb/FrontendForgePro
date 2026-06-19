@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { GOOGLE_FONTS } from './styleUtils';
-import { Input, Select } from '@/components/ui';
+import { FontPicker } from './FontPicker';
+import { Input } from '@/components/ui';
 
 export interface ThemeState {
   headingFont: string;
@@ -102,16 +102,10 @@ export function ThemePanel({ onApply }: Props) {
 
       <Group label="Typography">
         <Labeled label="Heading font">
-          <Select value={t.headingFont} onChange={(e) => update({ headingFont: e.target.value })}>
-            <option value="">Keep current</option>
-            {GOOGLE_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
-          </Select>
+          <FontPicker value={t.headingFont} placeholder="Keep current" onChange={(f) => update({ headingFont: f })} />
         </Labeled>
         <Labeled label="Body font">
-          <Select value={t.bodyFont} onChange={(e) => update({ bodyFont: e.target.value })}>
-            <option value="">Keep current</option>
-            {GOOGLE_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
-          </Select>
+          <FontPicker value={t.bodyFont} placeholder="Keep current" onChange={(f) => update({ bodyFont: f })} />
         </Labeled>
         <Labeled label="Base text size (px)">
           <Input

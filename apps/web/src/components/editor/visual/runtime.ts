@@ -171,26 +171,67 @@ export const RUNTIME_SOURCE = /* js */ `
     document.head.appendChild(s);
     motionInjected = true;
   }
+  // Real scroll-motion engine, injected as a persistent (non-chrome) script so it
+  // runs both in the editor preview AND in the exported/deployed site.
+  var ENGINE_SRC =
+    '(function(){' +
+    'if(window.__ffMotion){window.__ffMotion.refresh();return;}' +
+    'var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;' +
+    'if(!document.querySelector("style[data-ff-engine-css]")){var st=document.createElement("style");st.setAttribute("data-ff-engine-css","1");' +
+    'st.textContent="[data-ff-m=fade],[data-ff-m=up],[data-ff-m=left],[data-ff-m=right],[data-ff-m=zoom]{opacity:0;transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1);will-change:opacity,transform}[data-ff-m=up]{transform:translateY(42px)}[data-ff-m=left]{transform:translateX(-42px)}[data-ff-m=right]{transform:translateX(42px)}[data-ff-m=zoom]{transform:scale(.9)}[data-ff-m][data-ff-in]{opacity:1!important;transform:none!important}";' +
+    'document.head.appendChild(st);}' +
+    'var io=new IntersectionObserver(function(es){for(var i=0;i<es.length;i++){if(es[i].isIntersecting)es[i].target.setAttribute("data-ff-in","1");else es[i].target.removeAttribute("data-ff-in");}},{threshold:.12});' +
+    'var px=[];' +
+    'function refresh(){var n=document.querySelectorAll("[data-ff-m]");px=[];for(var i=0;i<n.length;i++){var el=n[i];if(el.getAttribute("data-ff-m")==="parallax")px.push(el);else io.observe(el);}onScroll();}' +
+    'function onScroll(){if(reduce)return;var vh=window.innerHeight||document.documentElement.clientHeight;for(var i=0;i<px.length;i++){var el=px[i],r=el.getBoundingClientRect();var p=(r.top+r.height/2-vh/2)/vh;var sp=parseFloat(el.getAttribute("data-ff-speed")||"0.25");el.style.transform="translateY("+(p*-120*sp)+"px)";}}' +
+    'window.addEventListener("scroll",onScroll,{passive:true});window.addEventListener("resize",onScroll);' +
+    'window.__ffMotion={refresh:refresh};refresh();' +
+    '})();';
+  var engineInjected = false;
+  function ensureEngine() {
+    if (engineInjected || document.querySelector('script[data-ff-engine]')) {
+      engineInjected = true;
+      if (window.__ffMotion) window.__ffMotion.refresh();
+      return;
+    }
+    var sc = document.createElement('script');
+    sc.setAttribute('data-ff-engine', '1');
+    sc.textContent = ENGINE_SRC;
+    document.body.appendChild(sc);
+    engineInjected = true;
+  }
+
+  var SCROLL_ANIMS = { up: 1, fade: 1, left: 1, right: 1, zoom: 1, parallax: 1 };
   function setAnimation(ffid, name) {
     var el = byId(ffid);
     if (!el) return;
     var rm = [];
     for (var i = 0; i < el.classList.length; i++) { if (el.classList[i].indexOf('ff-anim-') === 0) rm.push(el.classList[i]); }
     for (var j = 0; j < rm.length; j++) el.classList.remove(rm[j]);
-    if (name) { ensureMotion(); el.classList.add('ff-anim-' + name); void el.offsetWidth; }
+    el.removeAttribute('data-ff-m');
+    el.style.removeProperty('transform'); // clear any parallax inline transform
+    if (!name) return;
+    if (SCROLL_ANIMS[name]) {
+      el.setAttribute('data-ff-m', name);
+      ensureEngine();
+      if (window.__ffMotion) window.__ffMotion.refresh();
+    } else {
+      ensureMotion();
+      el.classList.add('ff-anim-' + name);
+      void el.offsetWidth;
+    }
   }
 
-  // ---- selection overlay ------------------------------------------------
-  var hoverBox = mkBox('#6366f1', 0.08);
-  var selBox = mkBox('#4f46e5', 0.0);
-  selBox.style.outline = '2px solid #4f46e5';
+  // ---- selection overlay + on-canvas transform controls -----------------
+  var hoverEl = null;
   function mkBox(color, alpha) {
     var b = document.createElement('div');
     b.className = 'ff-chrome';
-    b.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483646;display:none;border:1px solid ' + color + ';background:rgba(99,102,241,' + alpha + ');transition:all .03s linear';
+    b.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483646;display:none;border:1px solid ' + color + ';background:rgba(99,102,241,' + alpha + ')';
     document.documentElement.appendChild(b);
     return b;
   }
+  var hoverBox = mkBox('#6366f1', 0.08);
   function place(box, el) {
     if (!el) { box.style.display = 'none'; return; }
     var r = el.getBoundingClientRect();
@@ -200,8 +241,126 @@ export const RUNTIME_SOURCE = /* js */ `
     box.style.width = r.width + 'px';
     box.style.height = r.height + 'px';
   }
-  function refresh() { place(hoverBox, mode === 'edit' ? hoverEl : null); place(selBox, selected); }
-  var hoverEl = null;
+
+  // Interactive frame: 8 resize handles + a rotate handle, like Canva/Affinity.
+  var controls = document.createElement('div');
+  controls.className = 'ff-chrome';
+  controls.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;z-index:2147483646;display:none;outline:2px solid #4f46e5;box-sizing:border-box;transform-origin:center center';
+  document.documentElement.appendChild(controls);
+
+  function handleCursor(d) {
+    return { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', ne: 'nesw-resize', sw: 'nesw-resize', nw: 'nwse-resize', se: 'nwse-resize' }[d];
+  }
+  function handlePos(d) {
+    var o = '-6px', c = 'calc(50% - 5.5px)';
+    var top = d.indexOf('n') >= 0 ? o : (d.indexOf('s') >= 0 ? 'auto' : c);
+    var bottom = d.indexOf('s') >= 0 ? o : 'auto';
+    var left = d.indexOf('w') >= 0 ? o : (d.indexOf('e') >= 0 ? 'auto' : c);
+    var right = d.indexOf('e') >= 0 ? o : 'auto';
+    return 'top:' + top + ';bottom:' + bottom + ';left:' + left + ';right:' + right + ';';
+  }
+  ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach(function (dir) {
+    var h = document.createElement('div');
+    h.className = 'ff-chrome';
+    h.style.cssText = 'position:absolute;width:11px;height:11px;background:#fff;border:1.5px solid #4f46e5;border-radius:2px;pointer-events:auto;box-sizing:border-box;' + handlePos(dir) + 'cursor:' + handleCursor(dir);
+    controls.appendChild(h);
+    h.addEventListener('mousedown', function (e) { startResize(e, dir); });
+  });
+  var rotLine = document.createElement('div');
+  rotLine.className = 'ff-chrome';
+  rotLine.style.cssText = 'position:absolute;left:50%;top:-22px;width:2px;height:22px;background:#4f46e5;margin-left:-1px;pointer-events:none';
+  controls.appendChild(rotLine);
+  var rotateEl = document.createElement('div');
+  rotateEl.className = 'ff-chrome';
+  rotateEl.style.cssText = 'position:absolute;left:50%;top:-34px;width:14px;height:14px;margin-left:-7px;background:#4f46e5;border:2px solid #fff;border-radius:50%;pointer-events:auto;cursor:grab';
+  controls.appendChild(rotateEl);
+  rotateEl.addEventListener('mousedown', startRotate);
+
+  function isTextEl(el) {
+    if (el.tagName === 'IMG') return false;
+    for (var i = 0; i < el.children.length; i++) { if (!isChrome(el.children[i])) return false; }
+    return (el.textContent || '').trim().length > 0;
+  }
+
+  function startResize(e, dir) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selected) return;
+    var ffid = selected.getAttribute(FF_ID);
+    var cs = getComputedStyle(selected);
+    var rot = parseFloat(cs.getPropertyValue('--ff-rot')) || 0;
+    var startW = selected.offsetWidth, startH = selected.offsetHeight;
+    var startFont = parseFloat(cs.fontSize) || 16;
+    var text = isTextEl(selected);
+    var sx = e.clientX, sy = e.clientY;
+    function move(ev) {
+      var dx = ev.clientX - sx, dy = ev.clientY - sy;
+      var a = -rot * Math.PI / 180;
+      var lx = dx * Math.cos(a) - dy * Math.sin(a);
+      var ly = dx * Math.sin(a) + dy * Math.cos(a);
+      var sgX = dir.indexOf('e') >= 0 ? 1 : (dir.indexOf('w') >= 0 ? -1 : 0);
+      var sgY = dir.indexOf('s') >= 0 ? 1 : (dir.indexOf('n') >= 0 ? -1 : 0);
+      var rule = ruleFor(ffid, 'desktop');
+      if (text && dir.length === 2) {
+        var scale = Math.max(0.2, (startW + sgX * lx) / startW);
+        rule.style.setProperty('font-size', Math.max(6, Math.round(startFont * scale)) + 'px', 'important');
+      } else {
+        if (sgX !== 0) rule.style.setProperty('width', Math.max(16, Math.round(startW + sgX * lx)) + 'px', 'important');
+        if (sgY !== 0) rule.style.setProperty('height', Math.max(16, Math.round(startH + sgY * ly)) + 'px', 'important');
+      }
+      refreshControls();
+    }
+    function up() {
+      document.removeEventListener('mousemove', move, true);
+      document.removeEventListener('mouseup', up, true);
+      post({ type: 'changed' });
+      if (selected) post({ type: 'selected', node: nodeInfo(selected) });
+    }
+    document.addEventListener('mousemove', move, true);
+    document.addEventListener('mouseup', up, true);
+  }
+
+  function startRotate(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selected) return;
+    var ffid = selected.getAttribute(FF_ID);
+    var cs = getComputedStyle(selected);
+    var tx = parseFloat(cs.getPropertyValue('--ff-tx')) || 0;
+    var ty = parseFloat(cs.getPropertyValue('--ff-ty')) || 0;
+    var r = selected.getBoundingClientRect();
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    function move(ev) {
+      var ang = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI + 90;
+      if (ev.shiftKey) ang = Math.round(ang / 15) * 15;
+      applyTransform(ffid, tx, ty, Math.round(ang));
+      refreshControls();
+    }
+    function up() {
+      document.removeEventListener('mousemove', move, true);
+      document.removeEventListener('mouseup', up, true);
+      post({ type: 'changed' });
+      if (selected) post({ type: 'selected', node: nodeInfo(selected) });
+    }
+    document.addEventListener('mousemove', move, true);
+    document.addEventListener('mouseup', up, true);
+  }
+
+  function refreshControls() {
+    if (!selected || mode !== 'edit' || !selected.isConnected) { controls.style.display = 'none'; return; }
+    var r = selected.getBoundingClientRect();
+    var w = selected.offsetWidth, h = selected.offsetHeight;
+    var rot = parseFloat(getComputedStyle(selected).getPropertyValue('--ff-rot')) || 0;
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    controls.style.display = 'block';
+    controls.style.width = w + 'px';
+    controls.style.height = h + 'px';
+    controls.style.left = (cx - w / 2) + 'px';
+    controls.style.top = (cy - h / 2) + 'px';
+    controls.style.transform = 'rotate(' + rot + 'deg)';
+  }
+
+  function refresh() { place(hoverBox, mode === 'edit' ? hoverEl : null); refreshControls(); }
 
   // ---- node info --------------------------------------------------------
   var STYLE_KEYS = ['color','backgroundColor','fontFamily','fontSize','fontWeight','fontStyle','textAlign','lineHeight','letterSpacing','textTransform','paddingTop','paddingRight','paddingBottom','paddingLeft','marginTop','marginRight','marginBottom','marginLeft','borderRadius','borderWidth','borderColor','borderStyle','boxShadow','opacity','display','width','maxWidth','objectFit'];
@@ -233,8 +392,8 @@ export const RUNTIME_SOURCE = /* js */ `
     var tx = parseFloat(cs.getPropertyValue('--ff-tx')) || 0;
     var ty = parseFloat(cs.getPropertyValue('--ff-ty')) || 0;
     var rot = parseFloat(cs.getPropertyValue('--ff-rot')) || 0;
-    var anim = '';
-    for (var ai = 0; ai < el.classList.length; ai++) { if (el.classList[ai].indexOf('ff-anim-') === 0) { anim = el.classList[ai].slice(8); break; } }
+    var anim = el.getAttribute('data-ff-m') || '';
+    if (!anim) { for (var ai = 0; ai < el.classList.length; ai++) { if (el.classList[ai].indexOf('ff-anim-') === 0) { anim = el.classList[ai].slice(8); break; } } }
     return {
       ffid: el.getAttribute(FF_ID),
       tag: el.tagName.toLowerCase(),
@@ -460,6 +619,7 @@ export const RUNTIME_SOURCE = /* js */ `
 
   // ---- boot -------------------------------------------------------------
   ensureIds();
+  if (document.querySelector('[data-ff-m]')) ensureEngine();
   post({ type: 'ready' });
 })();
 `;

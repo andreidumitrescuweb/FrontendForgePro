@@ -9,6 +9,7 @@ import { ThemePanel } from './ThemePanel';
 import { SectionLibrary } from './SectionLibrary';
 import { ShapesPanel } from './ShapesPanel';
 import { EmojiPanel } from './EmojiPanel';
+import { isSystemFont } from './styleUtils';
 import type { DeviceMode, NodeInfo, NodeStyles } from './protocol';
 
 interface Props {
@@ -110,7 +111,7 @@ export function VisualEditor({ files, entryFile, assets, onChange, onSave }: Pro
   // Push theme/fonts into the iframe whenever they change.
   useEffect(() => {
     if (!ready) return;
-    const fontLinks = Array.from(new Set([...themeFonts, ...elementFonts]));
+    const fontLinks = Array.from(new Set([...themeFonts, ...elementFonts])).filter((f) => !isSystemFont(f));
     if (themeCss === '' && fontLinks.length === 0) return;
     send({ type: 'setTheme', css: themeCss, fontLinks });
   }, [ready, themeCss, themeFonts, elementFonts, send]);

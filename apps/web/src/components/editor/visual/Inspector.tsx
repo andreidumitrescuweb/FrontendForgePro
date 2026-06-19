@@ -2,15 +2,17 @@
 
 import { useState, type ReactNode } from 'react';
 import type { DeviceMode, NodeInfo, NodeStyles } from './protocol';
-import { FONT_GROUPS, FONT_WEIGHTS, primaryFont, toHex, toNum } from './styleUtils';
+import { FONT_WEIGHTS, primaryFont, toHex, toNum } from './styleUtils';
+import { FontPicker } from './FontPicker';
 import { Input, Select } from '@/components/ui';
 
 const ANIMATIONS: Array<[string, string]> = [
   ['', 'None'],
-  ['fade', 'Fade in'],
-  ['up', 'Slide up'],
-  ['left', 'Slide in'],
-  ['zoom', 'Zoom in'],
+  ['up', 'Reveal up (on scroll)'],
+  ['fade', 'Reveal fade (on scroll)'],
+  ['left', 'Reveal slide (on scroll)'],
+  ['zoom', 'Reveal zoom (on scroll)'],
+  ['parallax', 'Parallax (on scroll)'],
   ['float', 'Float (loop)'],
   ['pulse', 'Pulse (loop)'],
   ['spin', 'Spin (loop)'],
@@ -113,23 +115,14 @@ export function Inspector(props: Props) {
       {!node.isImage && (
         <Section title="Typography" defaultOpen={!!node.text}>
           <Field label="Font">
-            <Select
-              defaultValue={primaryFont(c.fontFamily) || ''}
-              onChange={(e) => {
-                const fam = e.target.value;
-                if (fam) {
-                  props.onFont(fam);
-                  onStyle({ fontFamily: `"${fam}", sans-serif` });
-                }
+            <FontPicker
+              value={primaryFont(c.fontFamily) || ''}
+              onChange={(fam) => {
+                if (!fam) { onStyle({ fontFamily: '' }); return; }
+                props.onFont(fam);
+                onStyle({ fontFamily: `"${fam}", sans-serif` });
               }}
-            >
-              <option value="">Default</option>
-              {FONT_GROUPS.map((g) => (
-                <optgroup key={g.label} label={g.label}>
-                  {g.fonts.map((f) => <option key={f} value={f}>{f}</option>)}
-                </optgroup>
-              ))}
-            </Select>
+            />
           </Field>
           <div className="grid grid-cols-2 gap-2">
             <Field label="Size (px)">
