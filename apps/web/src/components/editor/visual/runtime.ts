@@ -509,7 +509,8 @@ export const RUNTIME_SOURCE = /* js */ `
     if (live && live.sheet) {
       var text = '';
       for (var i = 0; i < live.sheet.cssRules.length; i++) text += live.sheet.cssRules[i].cssText + '\\n';
-      var clone = doc.getElementById(FF_OVERRIDES);
+      // doc is a cloned <html> element, not a Document — use querySelector.
+      var clone = doc.querySelector('#' + FF_OVERRIDES);
       if (clone) clone.textContent = text;
     }
   }

@@ -12,3 +12,6 @@ apps/api/uploads/
 playwright-report/
 test-results/
 .turbo/
+
+# visual-editor runtime smoke-test output
+.fftest/
