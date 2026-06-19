@@ -1,4 +1,6 @@
 import { FF_ID_ATTR, FF_SRC_ATTR, FF_THEME_ID } from './protocol';
+import { MOTION_ENGINE_SRC } from './motionEngine';
+import { BLANK_TEMPLATE } from './templates';
 
 /**
  * Builds the self-contained HTML document loaded into the editor iframe.
@@ -12,9 +14,9 @@ export function buildEditorSrcDoc(
   entryFile: string,
   assets: Array<{ path: string; url: string }>,
 ): string {
-  let html =
-    files[entryFile] ??
-    '<!doctype html><html><body style="font-family:sans-serif;padding:2rem">Generate the project to start designing.</body></html>';
+  // Fall back to the professional blank skeleton (never a throwaway placeholder
+  // string) so an un-generated project is still a clean, savable starting point.
+  let html = files[entryFile] || BLANK_TEMPLATE.files['index.html'];
 
   // Point generated asset references at their CDN/S3 URLs for rendering.
   for (const asset of assets) {
@@ -171,22 +173,9 @@ export const RUNTIME_SOURCE = /* js */ `
     document.head.appendChild(s);
     motionInjected = true;
   }
-  // Real scroll-motion engine, injected as a persistent (non-chrome) script so it
-  // runs both in the editor preview AND in the exported/deployed site.
-  var ENGINE_SRC =
-    '(function(){' +
-    'if(window.__ffMotion){window.__ffMotion.refresh();return;}' +
-    'var reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;' +
-    'if(!document.querySelector("style[data-ff-engine-css]")){var st=document.createElement("style");st.setAttribute("data-ff-engine-css","1");' +
-    'st.textContent="[data-ff-m=fade],[data-ff-m=up],[data-ff-m=left],[data-ff-m=right],[data-ff-m=zoom]{opacity:0;transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1);will-change:opacity,transform}[data-ff-m=up]{transform:translateY(42px)}[data-ff-m=left]{transform:translateX(-42px)}[data-ff-m=right]{transform:translateX(42px)}[data-ff-m=zoom]{transform:scale(.9)}[data-ff-m][data-ff-in]{opacity:1!important;transform:none!important}";' +
-    'document.head.appendChild(st);}' +
-    'var io=new IntersectionObserver(function(es){for(var i=0;i<es.length;i++){if(es[i].isIntersecting)es[i].target.setAttribute("data-ff-in","1");else es[i].target.removeAttribute("data-ff-in");}},{threshold:.12});' +
-    'var px=[];' +
-    'function refresh(){var n=document.querySelectorAll("[data-ff-m]");px=[];for(var i=0;i<n.length;i++){var el=n[i];if(el.getAttribute("data-ff-m")==="parallax")px.push(el);else io.observe(el);}onScroll();}' +
-    'function onScroll(){if(reduce)return;var vh=window.innerHeight||document.documentElement.clientHeight;for(var i=0;i<px.length;i++){var el=px[i],r=el.getBoundingClientRect();var p=(r.top+r.height/2-vh/2)/vh;var sp=parseFloat(el.getAttribute("data-ff-speed")||"0.25");el.style.transform="translateY("+(p*-120*sp)+"px)";}}' +
-    'window.addEventListener("scroll",onScroll,{passive:true});window.addEventListener("resize",onScroll);' +
-    'window.__ffMotion={refresh:refresh};refresh();' +
-    '})();';
+  // Real scroll-motion engine (shared with templates), injected as a persistent
+  // (non-chrome) script so it runs both in the editor preview AND in exports.
+  var ENGINE_SRC = ${JSON.stringify(MOTION_ENGINE_SRC)};
   var engineInjected = false;
   function ensureEngine() {
     if (engineInjected || document.querySelector('script[data-ff-engine]')) {

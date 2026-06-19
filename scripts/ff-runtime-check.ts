@@ -4,6 +4,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { RUNTIME_SOURCE, buildEditorSrcDoc } from '../apps/web/src/components/editor/visual/runtime';
+import { TEMPLATES } from '../apps/web/src/components/editor/visual/templates';
 
 // 1) Parse-check the injected runtime — catches syntax errors tsc misses.
 try {
@@ -15,12 +16,10 @@ try {
   process.exit(2);
 }
 
-const files: Record<string, string> = {
-  'index.html': `<!doctype html><html><head><meta charset="utf-8"><title>T</title><link rel="stylesheet" href="styles.css"></head><body><section class="hero"><h1>Hello world</h1><p>Some paragraph text</p><button>Click me</button><img src="https://placehold.co/120x80" alt="x"></section><section class="features"><h2>Features</h2></section></body></html>`,
-  'styles.css': `body{font-family:system-ui;margin:0}.hero{padding:40px}h1{color:#111;font-size:40px}`,
-};
-
-const srcDoc = buildEditorSrcDoc(files, 'index.html', []);
+// Load the Agency template THROUGH the editor — exercises templates + engine +
+// selection + serialize together.
+const tpl = TEMPLATES[0];
+const srcDoc = buildEditorSrcDoc(tpl.files, tpl.entryFile, []);
 
 const outDir = join(process.cwd(), '.fftest');
 mkdirSync(outDir, { recursive: true });
@@ -40,7 +39,7 @@ writeFileSync(join(outDir, 'harness.html'), harness, 'utf8');
 // 2) Minimal static server so the iframe is same-origin (lets the harness reach in).
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
-const port = 8850;
+const port = 8852;
 http
   .createServer((req, res) => {
     try {
