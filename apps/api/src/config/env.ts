@@ -8,6 +8,8 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  /** Run the generation worker inside the API process (single-service deploys). */
+  INLINE_WORKER: z.string().default('true'),
 
   JWT_ACCESS_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),

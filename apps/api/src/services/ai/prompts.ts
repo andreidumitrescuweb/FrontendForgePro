@@ -11,7 +11,7 @@ Given a project brief, produce a build plan as strict JSON (no prose, no markdow
 }
 Think through structure, audience and tone before answering, then output ONLY the JSON object.`;
 
-export function plannerUser(brief: ProjectBrief): string {
+export function plannerUser(brief: ProjectBrief, referenceText?: string): string {
   return [
     `Project type: ${brief.projectType}`,
     `Description: ${brief.description}`,
@@ -22,6 +22,13 @@ export function plannerUser(brief: ProjectBrief): string {
       : 'No palette given — design one.',
     `Output framework: ${brief.framework}`,
     brief.languages?.length ? `Languages (first = primary): ${brief.languages.join(', ')}` : '',
+    brief.referenceImages?.length
+      ? `The user uploaded ${brief.referenceImages.length} image(s) to feature on the site — plan image slots (hero, gallery, about) for them.`
+      : '',
+    brief.referenceUrls?.length ? `Reference / inspiration sites: ${brief.referenceUrls.join(', ')}` : '',
+    referenceText
+      ? `\nContent extracted from the user's reference sites — reuse the real copy, services, and structure where relevant instead of inventing generic text:\n${referenceText}`
+      : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -41,7 +48,12 @@ Output STRICT JSON (no markdown fences): { "files": { "<path>": "<content>", ...
 Every file complete — never truncate.`;
 
 export function generatorUser(brief: ProjectBrief, planJson: string, feedback?: string): string {
-  const base = `Brief:\n${plannerUser(brief)}\n\nApproved build plan:\n${planJson}`;
+  const refImages = brief.referenceImages?.length
+    ? `\n\nUser-provided images — use these EXACT URLs as <img src> in fitting places (hero, gallery, about, testimonials). Do NOT replace them with placeholders or invented paths:\n${brief.referenceImages
+        .map((u, i) => `${i + 1}. ${u}`)
+        .join('\n')}`
+    : '';
+  const base = `Brief:\n${plannerUser(brief)}\n\nApproved build plan:\n${planJson}${refImages}`;
   return feedback
     ? `${base}\n\nThe previous attempt FAILED validation. Fix every issue below and regenerate the full bundle:\n${feedback}`
     : base;

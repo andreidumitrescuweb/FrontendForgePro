@@ -68,6 +68,8 @@ services:
       DATABASE_URL: postgresql://forge:forge@postgres:5432/frontendforge?schema=public
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
+      # A dedicated `worker` service consumes the queue here.
+      INLINE_WORKER: "false"
     ports:
       - "4000:4000"
     depends_on:

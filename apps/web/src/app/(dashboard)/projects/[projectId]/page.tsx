@@ -9,6 +9,7 @@ import { Badge, Button, Select, Spinner } from '@/components/ui';
 import { PreviewFrame } from '@/components/editor/PreviewFrame';
 import { ChatPanel } from '@/components/editor/ChatPanel';
 import { VersionTimeline } from '@/components/editor/VersionTimeline';
+import { VisualEditor } from '@/components/editor/visual/VisualEditor';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
@@ -58,6 +59,8 @@ export default function ProjectEditorPage() {
   const [entryFile, setEntryFile] = useState('index.html');
   const [assets, setAssets] = useState<Bundle['assets']>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState<'design' | 'code'>('design');
+  const [designKey, setDesignKey] = useState(0);
   const [rightTab, setRightTab] = useState<'preview' | 'chat' | 'versions'>('preview');
   const [genStatus, setGenStatus] = useState<string | null>(null);
   const [deployProvider, setDeployProvider] = useState('VERCEL');
@@ -82,6 +85,8 @@ export default function ProjectEditorPage() {
       setEntryFile(res.bundle.entryFile);
       setAssets(res.bundle.assets ?? []);
       setActiveFile((cur) => cur ?? res.bundle!.entryFile);
+      // Remount the visual editor so it (re)loads the freshly fetched design.
+      setDesignKey((k) => k + 1);
     }
     setDirty(false);
   }, [projectId]);
@@ -172,6 +177,25 @@ export default function ProjectEditorPage() {
     showToast('Version saved');
   }
 
+  // Lift live visual edits into shared state so Export/Deploy/Code stay in sync.
+  const onDesignChange = useCallback((next: Record<string, string>) => {
+    setFiles(next);
+    setDirty(true);
+  }, []);
+
+  async function saveDesign(next: Record<string, string>) {
+    await apiPost(`/projects/${projectId}/versions`, { files: next, label: 'Visual edit' });
+    setFiles(next);
+    setDirty(false);
+    showToast('Design saved');
+  }
+
+  function switchMode(mode: 'design' | 'code') {
+    // Re-sync the visual editor with any code-mode edits when returning to Design.
+    if (mode === 'design') setDesignKey((k) => k + 1);
+    setEditMode(mode);
+  }
+
   async function aiInstruction(instruction: string) {
     try {
       const res = await apiPost<{ bundle: Bundle; changedFiles: string[] }>(
@@ -247,6 +271,19 @@ export default function ProjectEditorPage() {
       {/* Toolbar */}
       <div className="flex h-14 items-center gap-3 border-b border-slate-200 bg-white px-4">
         <h1 className="mr-2 truncate font-semibold">{project.name}</h1>
+        <div className="flex overflow-hidden rounded-lg border border-slate-200">
+          {(['design', 'code'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => switchMode(m)}
+              className={`px-3 py-1.5 text-xs font-semibold capitalize ${
+                editMode === m ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {m === 'design' ? '🎨 Design' : '⟨⟩ Code'}
+            </button>
+          ))}
+        </div>
         {dirty && <Badge variant="warning">Unsaved</Badge>}
         <Button size="sm" onClick={() => void generate()} disabled={genStatus !== null}>
           {genStatus ? (
@@ -294,6 +331,16 @@ export default function ProjectEditorPage() {
       )}
 
       {/* Workspace */}
+      {editMode === 'design' ? (
+        <VisualEditor
+          key={designKey}
+          files={files}
+          entryFile={entryFile}
+          assets={assets}
+          onChange={onDesignChange}
+          onSave={saveDesign}
+        />
+      ) : (
       <div className="flex min-h-0 flex-1">
         {/* Editor pane */}
         <div className="flex min-w-0 flex-1 flex-col border-r border-slate-200">
@@ -359,6 +406,7 @@ export default function ProjectEditorPage() {
           </div>
         </div>
       </div>
+      )}
 
       {toast && (
         <div role="status" className="fixed bottom-4 right-4 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">

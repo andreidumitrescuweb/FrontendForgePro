@@ -17,6 +17,7 @@ import { adminRouter } from './modules/admin/admin.routes';
 import { analyticsRouter } from './modules/analytics/analytics.routes';
 import { chatRouter } from './modules/chat/chat.routes';
 import { deployRouter } from './modules/deployments/deploy.routes';
+import { uploadsRouter } from './modules/uploads/uploads.routes';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
 
@@ -53,6 +54,10 @@ export function createApp(): Express {
   // Public analytics: open CORS, text bodies from sendBeacon.
   app.use('/api/v1/analytics/ingest', cors(), express.text({ type: '*/*', limit: '10kb' }));
   app.use('/api/v1/analytics/script.js', cors());
+
+  // Image uploads carry base64 payloads — mount with a larger limit before the
+  // default 5mb JSON parser so those bodies aren't rejected.
+  app.use('/api/v1/uploads', restrictiveCors, express.json({ limit: '14mb' }), uploadsRouter);
 
   app.use(express.json({ limit: '5mb' }));
   app.use(cookieParser());

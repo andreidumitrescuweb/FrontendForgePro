@@ -36,6 +36,8 @@ export interface ProjectBrief {
   colorPalette?: string[]; // hex values; omitted => AI generates one
   framework: OutputFramework;
   languages?: string[]; // ISO codes; first is primary, RTL handled automatically
+  referenceUrls?: string[]; // existing/inspiration sites to read for content & style
+  referenceImages?: string[]; // user-uploaded image URLs to place into the site
 }
 
 /** Files produced by a generation, keyed by relative path. */

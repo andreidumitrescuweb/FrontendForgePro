@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { timeAgo } from '@/lib/utils';
 import { Badge, Button, Card, CardContent, Input, Spinner } from '@/components/ui';
 
@@ -53,6 +53,20 @@ export default function DashboardPage() {
     await apiPost('/workspaces', { name: newWsName.trim() });
     setNewWsName('');
     await loadWorkspaces();
+  }
+
+  async function deleteProject(id: string, name: string) {
+    if (!window.confirm(`Delete “${name}”? This cannot be undone.`)) return;
+    setProjects((prev) => prev?.filter((p) => p.id !== id) ?? null);
+    try {
+      await apiDelete(`/projects/${id}`);
+    } catch {
+      // Re-sync if the delete failed server-side.
+      if (activeWs) {
+        const res = await apiGet<{ projects: ProjectSummary[] }>(`/projects/workspace/${activeWs}`);
+        setProjects(res.projects);
+      }
+    }
   }
 
   return (
@@ -107,8 +121,16 @@ export default function DashboardPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((p) => (
-              <Link key={p.id} href={`/projects/${p.id}`}>
-                <Card className="transition-shadow hover:shadow-md">
+              <Card key={p.id} className="group relative transition-shadow hover:shadow-md">
+                <button
+                  onClick={() => void deleteProject(p.id, p.name)}
+                  aria-label={`Delete ${p.name}`}
+                  title="Delete project"
+                  className="absolute right-2 top-2 z-10 rounded-md p-1.5 text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                >
+                  🗑
+                </button>
+                <Link href={`/projects/${p.id}`}>
                   <CardContent>
                     <div className="flex items-start justify-between">
                       <h2 className="font-semibold">{p.name}</h2>
@@ -124,8 +146,8 @@ export default function DashboardPage() {
                       {timeAgo(p.updatedAt)}
                     </p>
                   </CardContent>
-                </Card>
-              </Link>
+                </Link>
+              </Card>
             ))}
           </div>
         )}

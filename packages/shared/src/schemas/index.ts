@@ -40,6 +40,14 @@ export const projectBriefSchema = z.object({
   colorPalette: z.array(z.string().regex(/^#[0-9a-fA-F]{6}$/)).max(8).optional(),
   framework: z.enum(['VANILLA', 'REACT']).default('VANILLA'),
   languages: z.array(z.string().min(2).max(8)).max(10).optional(),
+  // Existing/inspiration sites the AI should read for content & style cues.
+  referenceUrls: z.array(z.string().url()).max(5).optional(),
+  // User-uploaded images (S3 URLs) the AI should place into the site.
+  referenceImages: z.array(z.string().url()).max(10).optional(),
+});
+
+export const uploadImageSchema = z.object({
+  dataUrl: z.string().regex(/^data:image\/(png|jpe?g|webp|gif|avif);base64,/, 'Must be an image data URL'),
 });
 
 export const createProjectSchema = z.object({

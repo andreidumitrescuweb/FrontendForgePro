@@ -5,6 +5,7 @@ import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
 import { generationQueue } from './queues/generation.queue';
+import { startGenerationWorker } from './queues/generation.worker';
 import { attachCollabServer } from './realtime/collab';
 import { attachChatServer } from './realtime/chat';
 
@@ -14,8 +15,16 @@ const server = http.createServer(app);
 attachCollabServer(server);
 const io = attachChatServer(server);
 
+// Single-service deploys (e.g. Railway) run the generation worker in-process so
+// queued jobs are actually consumed. Disable with INLINE_WORKER=false when a
+// dedicated worker process is running instead.
+const inlineWorker = env.INLINE_WORKER !== 'false' ? startGenerationWorker() : null;
+
 server.listen(env.API_PORT, () => {
-  logger.info(`FrontendForge API listening on :${env.API_PORT}`, { env: env.NODE_ENV });
+  logger.info(`FrontendForge API listening on :${env.API_PORT}`, {
+    env: env.NODE_ENV,
+    inlineWorker: inlineWorker !== null,
+  });
 });
 
 // Graceful shutdown: stop accepting, drain, close dependencies.
@@ -31,6 +40,7 @@ async function shutdown(signal: string): Promise<void> {
 
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await io.close();
+  if (inlineWorker) await inlineWorker.close();
   await generationQueue.close();
   await prisma.$disconnect();
   redis.disconnect();

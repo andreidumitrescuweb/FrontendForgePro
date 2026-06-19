@@ -54,9 +54,10 @@ export async function runGenerationPipeline(
   options: { watermark: boolean; analyticsKey: string },
 ): Promise<GenerationResult> {
   await onStatus('PLANNING');
+  const referenceText = await scrapeReferences(brief.referenceUrls ?? []);
   const planRaw = await generateCompletion({
     system: PLANNER_SYSTEM,
-    user: plannerUser(brief),
+    user: plannerUser(brief, referenceText),
     temperature: 0.6,
   });
   const plan = extractJson<BuildPlan>(planRaw.text);
@@ -176,6 +177,37 @@ async function materializeImageAssets(
     }
   }
   return assets;
+}
+
+/** Fetch the user's reference sites and reduce them to plain text for the planner. */
+async function scrapeReferences(urls: string[]): Promise<string> {
+  const parts: string[] = [];
+  for (const url of urls.slice(0, 5)) {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'user-agent': 'Mozilla/5.0 (compatible; FrontendForgeBot/1.0)' },
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+      const text = htmlToText(html).slice(0, 3000);
+      if (text) parts.push(`Source: ${url}\n${text}`);
+    } catch (err) {
+      logger.warn('Reference fetch failed; skipping', { url, err: String(err) });
+    }
+  }
+  return parts.join('\n\n---\n\n');
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function serializeFiles(files: Record<string, string>): string {
