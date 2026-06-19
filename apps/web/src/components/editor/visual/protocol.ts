@@ -33,6 +33,10 @@ export interface NodeInfo {
   canMoveDown: boolean;
   /** Resolved styles (computed unless an inline override exists). */
   computed: NodeStyles;
+  /** Current free-transform (drag offset + rotation). */
+  transform: { tx: number; ty: number; rot: number };
+  /** Active animation preset name, or '' for none. */
+  animation: string;
   /** Human label for the breadcrumb, e.g. "section.hero > h1". */
   label: string;
 }
@@ -91,6 +95,8 @@ export type HostMessage =
   | { source: 'ff'; type: 'select'; ffid: string }
   | { source: 'ff'; type: 'deselect' }
   | { source: 'ff'; type: 'applyStyle'; ffid: string; styles: Partial<NodeStyles>; breakpoint: DeviceMode }
+  | { source: 'ff'; type: 'applyTransform'; ffid: string; tx: number; ty: number; rot: number }
+  | { source: 'ff'; type: 'setAnimation'; ffid: string; name: string }
   | { source: 'ff'; type: 'setAttr'; ffid: string; attr: string; value: string }
   | { source: 'ff'; type: 'setText'; ffid: string; text: string }
   | { source: 'ff'; type: 'setTheme'; css: string; fontLinks: string[] }

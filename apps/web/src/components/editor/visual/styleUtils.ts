@@ -29,25 +29,46 @@ export function isTransparent(value: string | undefined): boolean {
   return !value || value === 'transparent' || /rgba?\([^)]*,\s*0\s*\)/.test(value);
 }
 
-/** Curated Google Fonts that cover most SMB brand tones. */
-export const GOOGLE_FONTS = [
-  'Inter',
-  'Poppins',
-  'Roboto',
-  'Montserrat',
-  'Open Sans',
-  'Lato',
-  'Raleway',
-  'Nunito',
-  'Work Sans',
-  'Playfair Display',
-  'Merriweather',
-  'Lora',
-  'Source Sans 3',
-  'DM Sans',
-  'Space Grotesk',
-  'Manrope',
+/** Google Fonts grouped by style so the picker can show optgroups. */
+export const FONT_GROUPS: Array<{ label: string; fonts: string[] }> = [
+  {
+    label: 'Sans-serif',
+    fonts: [
+      'Inter', 'Poppins', 'Roboto', 'Montserrat', 'Open Sans', 'Lato', 'Raleway',
+      'Nunito', 'Nunito Sans', 'Work Sans', 'Source Sans 3', 'DM Sans', 'Manrope',
+      'Mulish', 'Rubik', 'Karla', 'Figtree', 'Plus Jakarta Sans', 'Outfit',
+      'Sora', 'Albert Sans', 'Onest', 'Hanken Grotesk', 'Schibsted Grotesk',
+      'Be Vietnam Pro', 'Archivo', 'Barlow', 'Kanit', 'Quicksand', 'Josefin Sans',
+      'Cabin', 'PT Sans', 'Oxygen', 'Assistant', 'Heebo',
+    ],
+  },
+  {
+    label: 'Display / Geometric',
+    fonts: [
+      'Space Grotesk', 'Lexend', 'Unbounded', 'Clash Display', 'Syne', 'Bricolage Grotesque',
+      'Fraunces', 'Bricolage Grotesque', 'Anton', 'Bebas Neue', 'Oswald', 'Righteous',
+      'Pacifico', 'Lobster', 'Comfortaa',
+    ],
+  },
+  {
+    label: 'Serif',
+    fonts: [
+      'Playfair Display', 'Merriweather', 'Lora', 'PT Serif', 'Source Serif 4',
+      'Cormorant Garamond', 'EB Garamond', 'Libre Baskerville', 'Crimson Text',
+      'DM Serif Display', 'Spectral', 'Bitter', 'Zilla Slab', 'Newsreader',
+    ],
+  },
+  {
+    label: 'Monospace / Handwriting',
+    fonts: [
+      'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Space Mono', 'Roboto Mono',
+      'Caveat', 'Dancing Script', 'Kalam', 'Shadows Into Light', 'Permanent Marker',
+    ],
+  },
 ];
+
+/** Flat list of every available font family (de-duplicated). */
+export const GOOGLE_FONTS = Array.from(new Set(FONT_GROUPS.flatMap((g) => g.fonts)));
 
 export const FONT_WEIGHTS = [
   { label: 'Light', value: '300' },

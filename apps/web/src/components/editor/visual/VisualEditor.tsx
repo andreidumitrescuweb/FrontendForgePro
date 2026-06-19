@@ -7,6 +7,8 @@ import { useVisualBridge } from './useVisualBridge';
 import { Inspector } from './Inspector';
 import { ThemePanel } from './ThemePanel';
 import { SectionLibrary } from './SectionLibrary';
+import { ShapesPanel } from './ShapesPanel';
+import { EmojiPanel } from './EmojiPanel';
 import type { DeviceMode, NodeInfo, NodeStyles } from './protocol';
 
 interface Props {
@@ -25,7 +27,8 @@ const DEVICE_WIDTH: Record<DeviceMode, string> = {
   mobile: '390px',
 };
 
-type RightTab = 'inspector' | 'theme' | 'sections';
+type RightTab = 'inspector' | 'insert' | 'theme';
+type InsertTab = 'sections' | 'shapes' | 'emoji';
 
 export function VisualEditor({ files, entryFile, assets, onChange, onSave }: Props) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -34,7 +37,8 @@ export function VisualEditor({ files, entryFile, assets, onChange, onSave }: Pro
   const [device, setDevice] = useState<DeviceMode>('desktop');
   const [previewing, setPreviewing] = useState(false);
   const [selected, setSelected] = useState<NodeInfo | null>(null);
-  const [rightTab, setRightTab] = useState<RightTab>('sections');
+  const [rightTab, setRightTab] = useState<RightTab>('insert');
+  const [insertTab, setInsertTab] = useState<InsertTab>('sections');
   const [saving, setSaving] = useState(false);
 
   // Files used to (re)build the iframe document. Internal edits don't bump this;
@@ -156,6 +160,14 @@ export function VisualEditor({ files, entryFile, assets, onChange, onSave }: Pro
     if (selected) send({ type: 'setText', ffid: selected.ffid, text });
   };
   const useFont = (family: string) => setElementFonts((prev) => (prev.includes(family) ? prev : [...prev, family]));
+  const applyTransform = (tx: number, ty: number, rot: number) => {
+    if (selected) send({ type: 'applyTransform', ffid: selected.ffid, tx, ty, rot });
+  };
+  const applyAnimation = (name: string) => {
+    if (selected) send({ type: 'setAnimation', ffid: selected.ffid, name });
+  };
+  const insertHtml = (html: string) =>
+    send({ type: 'insertSection', html, relativeTo: selected?.ffid ?? null, position: selected ? 'after' : 'append' });
 
   async function save() {
     setSaving(true);
@@ -228,7 +240,7 @@ export function VisualEditor({ files, entryFile, assets, onChange, onSave }: Pro
       {/* Right panel */}
       <div className="flex w-[320px] flex-col border-l border-slate-200 bg-white">
         <div className="flex border-b border-slate-200">
-          {(['inspector', 'sections', 'theme'] as RightTab[]).map((tab) => (
+          {(['inspector', 'insert', 'theme'] as RightTab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setRightTab(tab)}
@@ -246,6 +258,8 @@ export function VisualEditor({ files, entryFile, assets, onChange, onSave }: Pro
                 node={selected}
                 device={device}
                 onStyle={applyStyle}
+                onTransform={applyTransform}
+                onAnimation={applyAnimation}
                 onAttr={setAttr}
                 onText={setText}
                 onFont={useFont}
@@ -261,7 +275,24 @@ export function VisualEditor({ files, entryFile, assets, onChange, onSave }: Pro
                 Double-click text to type directly.
               </p>
             ))}
-          {rightTab === 'sections' && <SectionLibrary onInsert={(html) => send({ type: 'insertSection', html, relativeTo: selected?.ffid ?? null, position: selected ? 'after' : 'append' })} />}
+          {rightTab === 'insert' && (
+            <div>
+              <div className="flex gap-1 border-b border-slate-100 p-2">
+                {(['sections', 'shapes', 'emoji'] as InsertTab[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setInsertTab(t)}
+                    className={`flex-1 rounded-md py-1.5 text-xs font-medium capitalize ${insertTab === t ? 'bg-brand-50 text-brand-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              {insertTab === 'sections' && <SectionLibrary onInsert={insertHtml} />}
+              {insertTab === 'shapes' && <ShapesPanel onInsert={insertHtml} />}
+              {insertTab === 'emoji' && <EmojiPanel onInsert={insertHtml} />}
+            </div>
+          )}
           {rightTab === 'theme' && <ThemePanel onApply={(css, links) => { setThemeCss(css); setThemeFonts(links); }} />}
         </div>
       </div>

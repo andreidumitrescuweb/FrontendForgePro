@@ -131,6 +131,55 @@ export const RUNTIME_SOURCE = /* js */ `
     }
   }
 
+  // ---- free transform (drag + rotate via CSS vars) ----------------------
+  function ensureTransform(ffid) {
+    var rule = ruleFor(ffid, 'desktop');
+    if (rule.style.getPropertyValue('--ff-tx') === '') rule.style.setProperty('--ff-tx', '0px');
+    if (rule.style.getPropertyValue('--ff-ty') === '') rule.style.setProperty('--ff-ty', '0px');
+    if (rule.style.getPropertyValue('--ff-rot') === '') rule.style.setProperty('--ff-rot', '0deg');
+    rule.style.setProperty('transform', 'translate(var(--ff-tx),var(--ff-ty)) rotate(var(--ff-rot))', 'important');
+    return rule;
+  }
+  function applyTransform(ffid, tx, ty, rot) {
+    var rule = ensureTransform(ffid);
+    rule.style.setProperty('--ff-tx', tx + 'px');
+    rule.style.setProperty('--ff-ty', ty + 'px');
+    rule.style.setProperty('--ff-rot', rot + 'deg');
+  }
+
+  // ---- motion / animation presets ---------------------------------------
+  var motionInjected = false;
+  function ensureMotion() {
+    if (motionInjected || document.getElementById('ff-motion')) { motionInjected = true; return; }
+    var s = document.createElement('style');
+    s.id = 'ff-motion';
+    s.textContent =
+      '@keyframes ff-fade{from{opacity:0}to{opacity:1}}' +
+      '@keyframes ff-up{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}' +
+      '@keyframes ff-left{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}' +
+      '@keyframes ff-zoom{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}' +
+      '@keyframes ff-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}' +
+      '@keyframes ff-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}' +
+      '@keyframes ff-spin{to{transform:rotate(360deg)}}' +
+      '.ff-anim-fade{animation:ff-fade .8s ease both}' +
+      '.ff-anim-up{animation:ff-up .8s ease both}' +
+      '.ff-anim-left{animation:ff-left .8s ease both}' +
+      '.ff-anim-zoom{animation:ff-zoom .8s ease both}' +
+      '.ff-anim-float{animation:ff-float 3s ease-in-out infinite}' +
+      '.ff-anim-pulse{animation:ff-pulse 2.5s ease-in-out infinite}' +
+      '.ff-anim-spin{animation:ff-spin 9s linear infinite}';
+    document.head.appendChild(s);
+    motionInjected = true;
+  }
+  function setAnimation(ffid, name) {
+    var el = byId(ffid);
+    if (!el) return;
+    var rm = [];
+    for (var i = 0; i < el.classList.length; i++) { if (el.classList[i].indexOf('ff-anim-') === 0) rm.push(el.classList[i]); }
+    for (var j = 0; j < rm.length; j++) el.classList.remove(rm[j]);
+    if (name) { ensureMotion(); el.classList.add('ff-anim-' + name); void el.offsetWidth; }
+  }
+
   // ---- selection overlay ------------------------------------------------
   var hoverBox = mkBox('#6366f1', 0.08);
   var selBox = mkBox('#4f46e5', 0.0);
@@ -181,6 +230,11 @@ export const RUNTIME_SOURCE = /* js */ `
     var link = el.closest ? el.closest('a') : null;
     var hasElementChildren = false;
     for (var c = 0; c < el.children.length; c++) { if (!isChrome(el.children[c])) { hasElementChildren = true; break; } }
+    var tx = parseFloat(cs.getPropertyValue('--ff-tx')) || 0;
+    var ty = parseFloat(cs.getPropertyValue('--ff-ty')) || 0;
+    var rot = parseFloat(cs.getPropertyValue('--ff-rot')) || 0;
+    var anim = '';
+    for (var ai = 0; ai < el.classList.length; ai++) { if (el.classList[ai].indexOf('ff-anim-') === 0) { anim = el.classList[ai].slice(8); break; } }
     return {
       ffid: el.getAttribute(FF_ID),
       tag: el.tagName.toLowerCase(),
@@ -194,6 +248,8 @@ export const RUNTIME_SOURCE = /* js */ `
       canMoveUp: up,
       canMoveDown: down,
       computed: computed,
+      transform: { tx: tx, ty: ty, rot: rot },
+      animation: anim,
       label: labelOf(el)
     };
   }
@@ -242,6 +298,43 @@ export const RUNTIME_SOURCE = /* js */ `
 
   window.addEventListener('scroll', refresh, true);
   window.addEventListener('resize', refresh);
+
+  // ---- drag the selected element freely ---------------------------------
+  var drag = null;
+  document.addEventListener('mousedown', function (e) {
+    if (mode !== 'edit') return;
+    var t = e.target;
+    if (isChrome(t) || (t.isContentEditable)) return;
+    if (!selected || (t !== selected && !selected.contains(t))) return;
+    var ffid = selected.getAttribute(FF_ID);
+    var cs = getComputedStyle(selected);
+    drag = {
+      ffid: ffid,
+      startX: e.clientX,
+      startY: e.clientY,
+      baseTx: parseFloat(cs.getPropertyValue('--ff-tx')) || 0,
+      baseTy: parseFloat(cs.getPropertyValue('--ff-ty')) || 0,
+      rot: parseFloat(cs.getPropertyValue('--ff-rot')) || 0,
+      moved: false,
+    };
+  }, true);
+  document.addEventListener('mousemove', function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.startX;
+    var dy = e.clientY - drag.startY;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+    drag.moved = true;
+    e.preventDefault();
+    applyTransform(drag.ffid, drag.baseTx + dx, drag.baseTy + dy, drag.rot);
+    refresh();
+  }, true);
+  document.addEventListener('mouseup', function () {
+    if (drag && drag.moved) {
+      post({ type: 'changed' });
+      if (selected) post({ type: 'selected', node: nodeInfo(selected) });
+    }
+    drag = null;
+  }, true);
 
   // ---- DOM ops ----------------------------------------------------------
   function siblingDir(el, dir) {
@@ -315,6 +408,8 @@ export const RUNTIME_SOURCE = /* js */ `
       case 'select': select(byId(m.ffid)); break;
       case 'deselect': selected = null; refresh(); break;
       case 'applyStyle': applyStyle(m.ffid, m.styles, m.breakpoint); refresh(); post({ type: 'changed' }); break;
+      case 'applyTransform': applyTransform(m.ffid, m.tx, m.ty, m.rot); refresh(); post({ type: 'changed' }); break;
+      case 'setAnimation': setAnimation(m.ffid, m.name); post({ type: 'changed' }); if (selected) post({ type: 'selected', node: nodeInfo(selected) }); break;
       case 'setAttr': { var el = byId(m.ffid); if (el) { if (m.value === '' && m.attr !== 'alt') el.removeAttribute(m.attr); else el.setAttribute(m.attr, m.value); } post({ type: 'changed' }); break; }
       case 'setText': { var el2 = byId(m.ffid); if (el2) el2.textContent = m.text; post({ type: 'changed' }); break; }
       case 'setTheme': {

@@ -9,6 +9,13 @@ Given a project brief, produce a build plan as strict JSON (no prose, no markdow
   "imageAssets": [{ "path": "assets/hero.png", "prompt": "detailed image-generation prompt" }],
   "notes": "layout strategy: responsive approach, breakpoints, container queries usage"
 }
+Design guidance — avoid generic "AI slop": do NOT default to the same fonts and colors every time.
+- Choose a palette and font pairing that genuinely fit THIS brand's tone (playful, luxury, techy,
+  organic, bold, minimalist…). Vary across projects; avoid always picking Inter + indigo.
+- Pick distinctive Google Font pairings (e.g. a characterful display font for headings + a clean body font).
+- Plan an interesting, non-boilerplate layout: asymmetry, overlap, large type, varied section rhythms.
+- Note where subtle motion belongs (scroll reveals, hover states, a floating/parallax accent) when the
+  brand wants to feel modern and "alive" — never gratuitous.
 Think through structure, audience and tone before answering, then output ONLY the JSON object.`;
 
 export function plannerUser(brief: ProjectBrief, referenceText?: string): string {
@@ -40,7 +47,13 @@ You write production-grade frontend code. Rules:
 - Tailwind CSS via CDN utility classes ONLY; custom CSS only when utilities cannot express it.
 - Vanilla TypeScript-flavoured JS in a <script> tag (or Alpine.js via CDN for small reactive parts).
 - If framework is REACT: produce a single-file React app using CDN React + Babel standalone.
-- Mobile-first responsive design. Lazy-load images (loading="lazy"). Inline critical CSS in <head>.
+- Mobile-first responsive design that genuinely works on phones (fluid type via clamp(), stacked
+  layouts, tap targets ≥44px, no horizontal overflow). Test the small-screen layout mentally.
+- Lazy-load images (loading="lazy"). Inline critical CSS in <head>.
+- Make it feel "alive" when the brand calls for it: tasteful scroll-reveal animations (IntersectionObserver),
+  hover/focus transitions, a gently animated hero accent. Respect prefers-reduced-motion. Keep it smooth, never busy.
+- Avoid "AI slop": don't reuse the same generic fonts/colors/hero every time — honor the chosen palette
+  and font pairing from the plan and give the page a distinctive personality.
 - RTL: if primary language is Arabic or Hebrew, set dir="rtl" and mirror the layout.
 - Reference image assets by their relative paths from the plan; do not inline base64.
 

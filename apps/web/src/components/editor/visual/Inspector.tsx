@@ -2,13 +2,26 @@
 
 import { useState, type ReactNode } from 'react';
 import type { DeviceMode, NodeInfo, NodeStyles } from './protocol';
-import { FONT_WEIGHTS, GOOGLE_FONTS, primaryFont, toHex, toNum } from './styleUtils';
+import { FONT_GROUPS, FONT_WEIGHTS, primaryFont, toHex, toNum } from './styleUtils';
 import { Input, Select } from '@/components/ui';
+
+const ANIMATIONS: Array<[string, string]> = [
+  ['', 'None'],
+  ['fade', 'Fade in'],
+  ['up', 'Slide up'],
+  ['left', 'Slide in'],
+  ['zoom', 'Zoom in'],
+  ['float', 'Float (loop)'],
+  ['pulse', 'Pulse (loop)'],
+  ['spin', 'Spin (loop)'],
+];
 
 interface Props {
   node: NodeInfo;
   device: DeviceMode;
   onStyle: (styles: Partial<NodeStyles>) => void;
+  onTransform: (tx: number, ty: number, rot: number) => void;
+  onAnimation: (name: string) => void;
   onAttr: (attr: string, value: string) => void;
   onText: (text: string) => void;
   onFont: (family: string) => void;
@@ -111,7 +124,11 @@ export function Inspector(props: Props) {
               }}
             >
               <option value="">Default</option>
-              {GOOGLE_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+              {FONT_GROUPS.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.fonts.map((f) => <option key={f} value={f}>{f}</option>)}
+                </optgroup>
+              ))}
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-2">
@@ -230,6 +247,42 @@ export function Inspector(props: Props) {
             className="w-full"
           />
         </Field>
+      </Section>
+
+      {/* Free transform */}
+      <Section title="Transform & position">
+        <p className="text-[11px] leading-relaxed text-slate-400">
+          Tip: drag the selected element directly on the canvas to move it anywhere.
+        </p>
+        <Field label={`Rotation (${node.transform.rot}°)`}>
+          <input
+            type="range"
+            min={-180}
+            max={180}
+            defaultValue={node.transform.rot}
+            onChange={(e) => props.onTransform(node.transform.tx, node.transform.ty, Number(e.target.value))}
+            className="w-full"
+          />
+        </Field>
+        <button
+          onClick={() => props.onTransform(0, 0, 0)}
+          className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+        >
+          Reset position & rotation
+        </button>
+      </Section>
+
+      {/* Motion */}
+      <Section title="Motion">
+        <Field label="Animation">
+          <Select defaultValue={node.animation} onChange={(e) => props.onAnimation(e.target.value)}>
+            {ANIMATIONS.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+          </Select>
+        </Field>
+        <p className="text-[11px] leading-relaxed text-slate-400">
+          Entrance effects (fade, slide, zoom) play on load. Loop effects (float, pulse, spin) keep
+          the element moving — great for a livelier, less static page.
+        </p>
       </Section>
     </div>
   );

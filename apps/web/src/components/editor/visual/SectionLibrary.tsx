@@ -1,9 +1,12 @@
 'use client';
 
+import { appleEmojiUrl } from './emoji';
+
 /**
  * A palette of ready-made sections. Each block ships with self-contained inline
- * styles so it renders correctly no matter what the host page's CSS looks like;
- * the user then refines it with the Inspector.
+ * styles (responsive grids, fluid headings) so it renders correctly on phone,
+ * tablet and desktop no matter what the host page's CSS looks like; the user
+ * then refines it with the Inspector.
  */
 
 interface Block {
@@ -23,8 +26,8 @@ const BLOCKS: Block[] = [
     icon: '🦸',
     html: wrap(
       `<div style="max-width:760px;margin:0 auto;text-align:center">
-        <h1 style="font-size:48px;line-height:1.1;margin:0 0 16px;font-weight:800">Your headline goes here</h1>
-        <p style="font-size:20px;color:#475569;margin:0 0 28px">A short, compelling sub-headline that tells visitors exactly what you do.</p>
+        <h1 style="font-size:clamp(32px,6vw,48px);line-height:1.1;margin:0 0 16px;font-weight:800">Your headline goes here</h1>
+        <p style="font-size:clamp(16px,2.5vw,20px);color:#475569;margin:0 0 28px">A short, compelling sub-headline that tells visitors exactly what you do.</p>
         <a href="#" style="display:inline-block;background:#4f46e5;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:600">Get started</a>
       </div>`,
     ),
@@ -36,7 +39,7 @@ const BLOCKS: Block[] = [
     html: wrap(
       `<div style="max-width:1100px;margin:0 auto">
         <h2 style="text-align:center;font-size:34px;font-weight:700;margin:0 0 40px">Why choose us</h2>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px">
           ${[1, 2, 3]
             .map(
               () => `<div style="padding:28px;border:1px solid #e2e8f0;border-radius:14px">
@@ -70,7 +73,7 @@ const BLOCKS: Block[] = [
     html: wrap(
       `<div style="max-width:1000px;margin:0 auto">
         <h2 style="text-align:center;font-size:34px;font-weight:700;margin:0 0 40px">Simple pricing</h2>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px">
           ${['Starter|19|Basics for individuals', 'Pro|49|For growing teams', 'Business|99|Advanced needs']
             .map((p) => {
               const [name, price, desc] = p.split('|');
@@ -104,11 +107,11 @@ const BLOCKS: Block[] = [
   {
     id: 'gallery',
     label: 'Gallery',
-    icon: '🖼',
+    icon: '📸',
     html: wrap(
       `<div style="max-width:1100px;margin:0 auto">
         <h2 style="text-align:center;font-size:34px;font-weight:700;margin:0 0 32px">Gallery</h2>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px">
           ${[1, 2, 3, 4, 5, 6]
             .map(() => `<img src="https://placehold.co/400x300" alt="Gallery image" style="width:100%;border-radius:12px;display:block"/>`)
             .join('')}
@@ -167,7 +170,8 @@ export function SectionLibrary({ onInsert }: Props) {
             onClick={() => onInsert(b.html)}
             className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-200 bg-white py-4 hover:border-brand-400 hover:bg-brand-50"
           >
-            <span className="text-2xl">{b.icon}</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={appleEmojiUrl(b.icon)} alt="" className="h-6 w-6" loading="lazy" />
             <span className="text-xs font-medium text-slate-700">{b.label}</span>
           </button>
         ))}
